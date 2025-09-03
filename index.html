@@ -1,82 +1,661 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-	<meta charset="utf-8">
-	<meta name="description" content="">
-	<meta name="author" content="">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-	<title>Potree Viewer</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Potree Viewer</title>
 
-	<link rel="stylesheet" type="text/css" href="./libs/potree/potree.css">
-	<link rel="stylesheet" type="text/css" href="./libs/jquery-ui/jquery-ui.min.css">
-	<link rel="stylesheet" type="text/css" href="./libs/openlayers3/ol.css">
-	<link rel="stylesheet" type="text/css" href="./libs/spectrum/spectrum.css">
-	<link rel="stylesheet" type="text/css" href="./libs/jstree/themes/mixed/style.css">
+  <link rel="stylesheet" href="./libs/potree/potree.css" />
+  <link rel="stylesheet" href="./libs/jquery-ui/jquery-ui.min.css" />
+  <link rel="stylesheet" href="./libs/openlayers3/ol.css" />
+  <link rel="stylesheet" href="./libs/spectrum/spectrum.css" />
+  <link rel="stylesheet" href="./libs/jstree/themes/mixed/style.css" />
+
+  <style>
+    #potree_render_area { background:#1b1f24; }
+    #brandHeader { padding:10px 12px; background:#2b2f36; border-bottom:1px solid #3a3f47; }
+    #brandHeader img { display:block; width:100%; max-height:56px; object-fit:contain; }
+    #hudToast {
+      position:absolute; left:12px; right:12px; bottom:10px; margin:0 auto;
+      width:fit-content; max-width:90%;
+      background:rgba(25,28,34,.9); color:#e8eaf0;
+      border:1px solid #3a3f47; border-radius:8px;
+      padding:6px 10px; font:12px/1.3 system-ui,Segoe UI,Roboto,Arial,sans-serif;
+      pointer-events:none; opacity:0; transition:opacity .15s ease;
+      box-shadow:0 6px 20px rgba(0,0,0,.35);
+    }
+    #hudToast.show { opacity:1; }
+    .hk-table td:first-child{white-space:nowrap; width:1%; font-weight:600; padding-right:8px;}
+    .hk-card{margin:8px 0; border:1px solid #3a3f47; border-radius:6px; padding:8px;}
+    .hk-title{font-weight:700; margin-bottom:6px;}
+    .hk-table{width:100%; font-size:12px; border-collapse:collapse;}
+    .hk-table td{padding:2px 0; vertical-align:top;}
+  </style>
 </head>
 
 <body>
-	<script src="./libs/jquery/jquery-3.1.1.min.js"></script>
-	<script src="./libs/spectrum/spectrum.js"></script>
-	<script src="./libs/jquery-ui/jquery-ui.min.js"></script>
-	<script src="./libs/three.js/build/three.min.js"></script>
-	<script src="./libs/three.js/extra/lines.js"></script>
-	<script src="./libs/other/BinaryHeap.js"></script>
-	<script src="./libs/tween/tween.min.js"></script>
-	<script src="./libs/d3/d3.js"></script>
-	<script src="./libs/proj4/proj4.js"></script>
-	<script src="./libs/openlayers3/ol.js"></script>
-	<script src="./libs/i18next/i18next.js"></script>
-	<script src="./libs/jstree/jstree.js"></script>
-	<script src="./libs/potree/potree.js"></script>
-	<script src="./libs/plasio/js/laslaz.js"></script>
-	
-	<!-- INCLUDE ADDITIONAL DEPENDENCIES HERE -->
-		document.title = "";
-		viewer.setEDLEnabled(false);
-		viewer.setBackground("gradient"); // ["skybox", "gradient", "black", "white"];
-		viewer.setDescription(``);
-	
-	<div class="potree_container" style="position: absolute; width: 100%; height: 100%; left: 0px; top: 0px; ">
-		<div id="potree_render_area" style="background-image: url('./libs/potree/resources/images/background.jpg');"></div>
-		<div id="potree_sidebar_container"> </div>
-	</div>
-	
-	<script>
-	
-		window.viewer = new Potree.Viewer(document.getElementById("potree_render_area"));
-		
-		viewer.setEDLEnabled(true);
-		viewer.setFOV(60);
-		viewer.setPointBudget(2_000_000);
-		document.title = "";
-		viewer.setEDLEnabled(false);
-		viewer.setBackground("gradient"); // ["skybox", "gradient", "black", "white"];
-		viewer.setDescription(``);
-		viewer.loadSettingsFromURL();
-		
-		viewer.setDescription("");
-		
-		viewer.loadGUI(() => {
-			viewer.setLanguage('en');
-			$("#menu_appearance").next().show();
-			$("#menu_tools").next().show();
-			$("#menu_clipping").next().show();
-			viewer.toggleSidebar();
-		});
-		
-		Potree.loadPointCloud("pointclouds/index/cloud.js", "index", e => {
-			let pointcloud = e.pointcloud;
-			let material = pointcloud.material;
-			viewer.scene.addPointCloud(pointcloud);
-			//material.activeAttributeName = "rgba"; //[rgba, intensity, classification, ...]
-			material.size = 1;
-			material.pointSizeType = Potree.PointSizeType.ADAPTIVE;
-			material.shape = Potree.PointShape.SQUARE;
-			viewer.fitToScreen();
-		});
-		
-	</script>
-	
-	
-  </body>
+  <div class="potree_container" style="position:absolute; inset:0;">
+    <div id="potree_render_area"></div>
+    <div id="potree_sidebar_container"></div>
+    <div id="hudToast" aria-live="polite"></div>
+  </div>
+
+  <!-- libs -->
+  <script src="./libs/jquery/jquery-3.1.1.min.js"></script>
+  <script src="./libs/spectrum/spectrum.js"></script>
+  <script src="./libs/jquery-ui/jquery-ui.min.js"></script>
+  <script src="./libs/three.js/build/three.min.js"></script>
+  <script src="./libs/three.js/extra/lines.js"></script>
+  <script src="./libs/other/BinaryHeap.js"></script>
+  <script src="./libs/tween/tween.min.js"></script>
+  <script src="./libs/d3/d3.js"></script>
+  <script src="./libs/proj4/proj4.js"></script>
+  <script src="./libs/openlayers3/ol.js"></script>
+  <script src="./libs/i18next/i18next.js"></script>
+  <script src="./libs/jstree/jstree.js"></script>
+  <script src="./libs/potree/potree.js"></script>
+  <script src="./libs/plasio/js/laslaz.js"></script>
+
+  <script>
+    // ---------- Clean start ----------
+    try { localStorage.clear(); sessionStorage.clear(); } catch (e) {}
+
+    // ---------- Viewer ----------
+    window.viewer = new Potree.Viewer(document.getElementById("potree_render_area"));
+    document.title = "Potree Viewer";
+    viewer.setBackground("gradient");
+    viewer.setEDLEnabled(false);
+    viewer.setFOV(60);
+    viewer.setPointBudget(8_000_000);
+
+    // ---------- 0.001 m formatting ----------
+    try {
+      viewer.lengthUnit = "m";
+      viewer.lengthDecimals = 3;
+      if (viewer.setLengthUnit) viewer.setLengthUnit("m");
+      if (viewer.setLengthDecimals) viewer.setLengthDecimals(3);
+    } catch(e){}
+    (function(){
+      const fmt = (m)=> (Number(m)).toFixed(3) + " m";
+      try {
+        if (Potree && Potree.Utils) { Potree.Utils.formatLength = fmt; Potree.Utils.toStringLength = fmt; }
+        if (Potree && Potree.utils) { Potree.utils.formatLength = fmt; Potree.utils.toStringLength = fmt; }
+      } catch(e){}
+    })();
+    (function(){
+      const re=/(-?\d+(?:\.\d+)?)(\s*m)\b/;
+      const orig=CanvasRenderingContext2D.prototype.fillText;
+      if(!CanvasRenderingContext2D.prototype.__potree3decimals){
+        CanvasRenderingContext2D.prototype.fillText=function(text,x,y,maxW){
+          try{
+            if(typeof text==="string"){
+              const m=text.match(re);
+              if(m){ const v=Number(m[1]); if(!Number.isNaN(v)) text=text.replace(m[0], v.toFixed(3)+m[2]); }
+            }
+          }catch(e){}
+          return orig.call(this, text, x, y, maxW);
+        };
+        CanvasRenderingContext2D.prototype.__potree3decimals = true;
+      }
+    })();
+
+    // ---------- GUI ----------
+    viewer.loadGUI(function(){
+      viewer.setLanguage("en");
+      viewer.toggleSidebar();
+
+      const $side = $("#potree_sidebar_container");
+      (function(){
+        const logoURL = "./EnableLogo.png?v=" + Date.now();
+        const html = '<div id="brandHeader"><img src="' + logoURL + '" alt="Logo"></div>';
+        const $hdrAnchor = $side.find("a[href*='potree.org'], a[href*='github'], a[href*='twitter']").first();
+        const $hdrRow = $hdrAnchor.length ? $hdrAnchor.closest("div") : null;
+        if ($hdrRow && $hdrRow.length) { $hdrRow.html(html); } else { $side.prepend(html); }
+      })();
+
+      const hide = sel => { const $m=$(sel); if($m.length){$m.hide();$m.next().hide();} };
+      const show = sel => { const $m=$(sel); if($m.length){$m.show();$m.next().show();} };
+      hide("#menu_scene"); hide("#menu_appearance"); hide("#menu_edl"); hide("#menu_background");
+      hide("#menu_filters"); hide("#menu_about"); hide("#menu_other");
+      show("#menu_tools"); show("#menu_navigation");
+
+      // strip Clipping UI
+      const $tools = $("#menu_tools").next();
+      if ($tools.length){
+        $tools.find("*").filter(function(){ return $(this).text().trim().toLowerCase()==="clipping"; })
+          .each(function(){ const $s=$(this).closest("section, fieldset, div"); if($s.length) $s.hide(); });
+        $tools.find("*:contains('Clip Task'), *:contains('Clip Method')").each(function(){
+          $(this).closest("section, fieldset, div").hide();
+        });
+      }
+
+      // Hotkeys panel
+      (function injectHotkeysPanel(){
+        const $dst = $("#menu_tools").next();
+        if(!$dst.length || $("#hotkeysHelp").length) return;
+        const html = `
+          <section id="hotkeysHelp" class="hk-card">
+            <div class="hk-title">Hotkeys</div>
+            <table class="hk-table">
+              <tr><td>H</td><td>Horizontal chain (Top-Ortho, Z-clamp)</td></tr>
+              <tr><td>V</td><td>Vertical chain (pure ΔZ)</td></tr>
+              <tr><td>M</td><td>Measure (fresh session)</td></tr>
+              <tr><td>O</td><td>Orthographic projection</td></tr>
+              <tr><td>P</td><td>Perspective projection</td></tr>
+              <tr><td>B</td><td>Clip box show / hide</td></tr>
+              <tr><td>C</td><td>Clear all measurements</td></tr>
+              <tr><td>MMB</td><td>Global pan (any tool)</td></tr>
+              <tr><td>ESC</td><td>Exit current tool</td></tr>
+            </table>
+          </section>`;
+        $dst.prepend(html);
+      })();
+
+      // open Tools by default
+      setTimeout(function(){
+        const $h=$("#menu_tools"), $c=$h.next();
+        $h.removeClass("ui-accordion-header-collapsed").addClass("ui-accordion-header-active").attr("aria-expanded","true");
+        $c.addClass("ui-accordion-content-active").attr("aria-hidden","false").show();
+      }, 0);
+    });
+
+    // ---------- Toast ----------
+    function toast(msg){
+      const el = document.getElementById("hudToast");
+      el.textContent = msg;
+      el.classList.add("show");
+      clearTimeout(el.__t);
+      el.__t = setTimeout(function(){ el.classList.remove("show"); }, 1400);
+    }
+
+    // ---------- Globals for tools / picking ----------
+    var LAST_TOOL = null; // 'H','V','M','O','P'
+    var H_ACTIVE=false, H_MEAS=null, H_IV=null;
+    var V_ACTIVE=false, V_MEAS=null, V_IV=null;
+
+    var H_restore = {active:false, had:false, val:null};
+    var V_restore = {active:false, had:false, val:null};
+
+    const __pickBump = { active:false, prevBudget:null, prevSizes:new Map() };
+    function bumpPickResources(on){
+      try{
+        if(on){
+          if(__pickBump.active) return;
+          __pickBump.active = true;
+          __pickBump.prevBudget = (viewer.getPointBudget ? viewer.getPointBudget() : viewer.pointBudget);
+          const newBudget = Math.max(__pickBump.prevBudget || 8000000, 24000000);
+          if (viewer.setPointBudget) viewer.setPointBudget(newBudget); else viewer.pointBudget = newBudget;
+          const pcs = viewer.scene?.pointclouds || [];
+          __pickBump.prevSizes.clear();
+          for (let i=0;i<pcs.length;i++){
+            const mat = pcs[i]?.material;
+            if (mat){ __pickBump.prevSizes.set(pcs[i].uuid, mat.size); mat.size = Math.max(mat.size || 1.0, 2.5); }
+          }
+          requestAnimationFrame(()=>viewer.repaint());
+        } else {
+          if(!__pickBump.active) return;
+          if(__pickBump.prevBudget != null){
+            if (viewer.setPointBudget) viewer.setPointBudget(__pickBump.prevBudget); else viewer.pointBudget = __pickBump.prevBudget;
+          }
+          const pcs = viewer.scene?.pointclouds || [];
+          for (let i=0;i<pcs.length;i++){
+            const mat = pcs[i]?.material;
+            const prev = __pickBump.prevSizes.get(pcs[i].uuid);
+            if (mat != null && prev != null) mat.size = prev;
+          }
+          __pickBump.prevSizes.clear();
+          __pickBump.active = false;
+          viewer.repaint();
+        }
+      }catch(e){ console.warn("bumpPickResources error:", e); }
+    }
+
+    function resyncPickBufferOnce(){
+      if (viewer.onWindowResize) viewer.onWindowResize();
+      try{ viewer.inputHandler?.setScene?.(viewer.scene); }catch(e){}
+      viewer.repaint();
+    }
+    function resyncPickBuffer(){
+      requestAnimationFrame(()=>{ resyncPickBufferOnce();
+        requestAnimationFrame(()=>{ resyncPickBufferOnce(); });
+      });
+    }
+
+    function setCameraModeSafe(mode, tag){
+      viewer.setCameraMode(mode);
+      LAST_TOOL = tag || null;
+      resyncPickBuffer();
+    }
+
+    function synthRightClick(){
+      var el = (viewer.inputHandler && viewer.inputHandler.domElement) || (viewer.renderer && viewer.renderer.domElement) || document.getElementById("potree_render_area");
+      if(!el) return;
+      var types = ['pointerdown','mousedown','mouseup','pointerup','contextmenu'];
+      for (var i=0;i<types.length;i++){
+        try { el.dispatchEvent(new MouseEvent(types[i], {button:2, bubbles:true, cancelable:true})); } catch(e){}
+      }
+    }
+
+    // ---------- Clip-box + SAFE CLEAR GUARDS ----------
+    let IS_CLEARING = false;
+    let __origRemoveVolume = viewer.scene.removeVolume ? viewer.scene.removeVolume.bind(viewer.scene) : null;
+    let __origRemoveAllVolumes = typeof viewer.scene.removeAllVolumes === "function" ? viewer.scene.removeAllVolumes.bind(viewer.scene) : null;
+    const __origRemoveAllMeas = viewer.scene.removeAllMeasurements.bind(viewer.scene);
+
+    // Guarded refresh (no rebuilds while clearing)
+    function refreshClipBox(){
+      if (IS_CLEARING) return;
+      const scene = viewer.scene;
+      const old = window.__clipBox;
+      if (!old) return;
+
+      const pos = old.position.clone();
+      const scl = old.scale.clone();
+      const vis = old.visible;
+      const rot = old.rotation ? old.rotation.clone() : null;
+      const clip = old.clip === true;
+
+      window.__lockedBoxRef = null;
+      try { __origRemoveVolume && __origRemoveVolume(old); } catch(e){}
+
+      const box = new Potree.BoxVolume();
+      box.clip = clip;
+      box.visible = vis;
+      if (rot) box.rotation.copy(rot);
+      box.position.copy(pos);
+      box.scale.copy(scl);
+      scene.addVolume(box);
+      window.__clipBox = box;
+      window.__lockedBoxRef = box;
+
+      viewer.setClipMethod(Potree.ClipMethod.INSIDE_ANY);
+      viewer.setClipTask(Potree.ClipTask.SHOW_INSIDE);
+      viewer.repaint();
+    }
+
+    // Wrap clear-all measurements to avoid re-entrancy with our box
+    viewer.scene.removeAllMeasurements = function(){
+      if (IS_CLEARING) return;
+      IS_CLEARING = true;
+
+      // stop any active insertions/timers
+      try { viewer.measuringTool?.cancelInsertion?.(); } catch(e){}
+      if (H_IV){ clearInterval(H_IV); H_IV=null; }
+      if (V_IV){ clearInterval(V_IV); V_IV=null; }
+      H_ACTIVE=false; V_ACTIVE=false; H_MEAS=null; V_MEAS=null;
+
+      // let Potree remove everything (including our box) without our locks
+      const hadBox = !!window.__clipBox;
+      const saved = hadBox ? {
+        visible: window.__clipBox.visible,
+        pos: window.__clipBox.position.clone(),
+        scale: window.__clipBox.scale.clone(),
+        rot: window.__clipBox.rotation ? window.__clipBox.rotation.clone() : null
+      } : null;
+
+      const prevLock = window.__lockedBoxRef;
+      window.__lockedBoxRef = null;
+
+      requestAnimationFrame(()=> {
+        try {
+          __origRemoveAllMeas();
+          __origRemoveAllVolumes && __origRemoveAllVolumes();
+        } finally {
+          // rebuild our box AFTER clear (if it existed)
+          if (saved){
+            try{
+              const box = new Potree.BoxVolume();
+              box.clip = true;
+              box.visible = saved.visible;
+              box.position.copy(saved.pos);
+              box.scale.copy(saved.scale);
+              if (saved.rot) box.rotation.copy(saved.rot);
+              viewer.scene.addVolume(box);
+              window.__clipBox = box;
+              window.__lockedBoxRef = box;
+              viewer.setClipMethod(Potree.ClipMethod.INSIDE_ANY);
+              viewer.setClipTask(Potree.ClipTask.SHOW_INSIDE);
+            }catch(e){}
+          } else {
+            window.__lockedBoxRef = prevLock;
+          }
+          IS_CLEARING = false;
+          viewer.repaint();
+          toast("Cleared all measurements");
+        }
+      });
+    };
+
+    // Wrap volume removals to respect lock except during clear
+    if (__origRemoveVolume){
+      viewer.scene.removeVolume = function(v){
+        if (!IS_CLEARING && v === window.__lockedBoxRef){
+          console.warn("Locked clip box: deletion prevented.");
+          return;
+        }
+        return __origRemoveVolume(v);
+      };
+    }
+    if (__origRemoveAllVolumes){
+      viewer.scene.removeAllVolumes = function(){
+        if (IS_CLEARING) return __origRemoveAllVolumes();
+        const vols = viewer.scene.volumes.slice();
+        vols.forEach(v => { if (v !== window.__lockedBoxRef) __origRemoveVolume && __origRemoveVolume(v); });
+      };
+    }
+
+    // ---------- Load point cloud & create clip box ----------
+    Potree.loadPointCloud("pointclouds/index/cloud.js", "10grenoble", function(e){
+      const pc = e.pointcloud;
+      viewer.scene.addPointCloud(pc);
+
+      const mat = pc.material;
+      mat.activeAttributeName = "rgba";
+      mat.pointSizeType = Potree.PointSizeType.FIXED;
+      mat.shape = Potree.PointShape.CIRCLE;
+      mat.size = 1.0;
+
+      viewer.scene.scene.updateMatrixWorld(true);
+      pc.updateMatrixWorld(true);
+
+      const bbWorld = pc.boundingBox.clone().applyMatrix4(pc.matrixWorld);
+      const size = new THREE.Vector3(), center = new THREE.Vector3();
+      bbWorld.getSize(size);
+      bbWorld.getCenter(center);
+
+      const margin = 1.03;
+      const sx = Math.max(size.x*margin, 0.25);
+      const sy = Math.max(size.y*margin, 0.25);
+      const sz = Math.max(size.z*margin, 0.25);
+
+      const box = new Potree.BoxVolume();
+      box.clip = true;
+      box.visible = true;
+      if (box.rotation) box.rotation.set(0,0,0);
+      box.position.copy(center);
+      box.scale.set(sx, sy, sz);
+      viewer.scene.addVolume(box);
+      window.__clipBox = box;
+      window.__lockedBoxRef = box;
+
+      viewer.setClipMethod(Potree.ClipMethod.INSIDE_ANY);
+      viewer.setClipTask(Potree.ClipTask.SHOW_INSIDE);
+
+      viewer.fitToScreen();
+      viewer.repaint();
+    });
+
+    // ---------- Global MMB pan ----------
+    (function enableGlobalMMBPan(){
+      const renderEl = (viewer.inputHandler && viewer.inputHandler.domElement) || document.getElementById("potree_render_area");
+      const canvasEl = (viewer.renderer && viewer.renderer.domElement) || null;
+      let mmb = false, px = 0, py = 0;
+
+      function panPixels(dx, dy){
+        const cam = viewer.scene.getActiveCamera(); if (!cam) return;
+        const el = renderEl || canvasEl; if (!el) return;
+        const w = el.clientWidth, h = el.clientHeight;
+
+        let sx, sy;
+        if (cam.isOrthographicCamera){
+          sx = (cam.right - cam.left)/w;
+          sy = (cam.top - cam.bottom)/h;
+        } else {
+          const v = viewer.scene.view;
+          const pivot = (v && v._pivot && v._pivot.isVector3) ? v._pivot : (v ? v.position : new THREE.Vector3());
+          const d = cam.position.distanceTo(pivot) || (v ? v.radius : 50);
+          const vFov = (cam.fov || 60) * Math.PI/180;
+          const wy = (2*Math.tan(vFov/2) * d)/h;
+          const wx = wy * (w/h);
+          sx = wx; sy = wy;
+        }
+
+        const right = new THREE.Vector3(1,0,0).applyQuaternion(cam.quaternion);
+        const up    = new THREE.Vector3(0,1,0).applyQuaternion(cam.quaternion);
+        const delta = new THREE.Vector3().addScaledVector(right, -dx*sx).addScaledVector(up, dy*sy);
+
+        const view = viewer.scene.view;
+        if (view && view.position){ view.position.add(delta); if (view._pivot && view._pivot.isVector3) view._pivot.add(delta); }
+        cam.position.add(delta);
+        if (cam.target && cam.target.isVector3) cam.target.add(delta);
+        viewer.repaint();
+      }
+
+      function onPD(e){ if (e.button!==1) return; mmb=true; px=e.clientX; py=e.clientY; e.stopImmediatePropagation(); e.preventDefault(); }
+      function onPM(e){ if (!mmb) return; const dx=e.clientX-px, dy=e.clientY-py; px=e.clientX; py=e.clientY; panPixels(dx,dy); e.stopImmediatePropagation(); e.preventDefault(); }
+      function onPU(e){ if (e.button!==1) return; mmb=false; e.stopImmediatePropagation(); e.preventDefault(); }
+
+      const opts = {capture:true, passive:false};
+      (renderEl||document).addEventListener('pointerdown', onPD, opts);
+      (renderEl||document).addEventListener('pointermove', onPM,  opts);
+      (renderEl||document).addEventListener('pointerup',   onPU,  opts);
+      (renderEl||document).addEventListener('pointercancel', onPU, opts);
+      if (canvasEl && canvasEl !== renderEl){
+        canvasEl.addEventListener('pointerdown', onPD, opts);
+        canvasEl.addEventListener('pointermove', onPM,  opts);
+        canvasEl.addEventListener('pointerup',   onPU,  opts);
+        canvasEl.addEventListener('pointercancel', onPU, opts);
+      }
+    })();
+
+    // ---------- H tool (Top-Ortho, Z-clamp) ----------
+    function startHorizontalMeasure(){
+      const comingFromSensitive = (LAST_TOOL === 'M' || LAST_TOOL === 'P' || LAST_TOOL === 'O');
+      if (comingFromSensitive){
+        H_restore.active = true;
+        H_restore.had = Object.prototype.hasOwnProperty.call(viewer, 'pickWindowSize');
+        H_restore.val = viewer.pickWindowSize;
+        if (!(typeof viewer.pickWindowSize === 'number' && viewer.pickWindowSize >= 24)){
+          viewer.pickWindowSize = 24;
+        }
+      } else {
+        H_restore.active = false;
+      }
+
+      // camera first, then resync
+      viewer.setCameraMode(Potree.CameraMode.ORTHOGRAPHIC);
+      viewer.scene.view.pitch = -Math.PI/2;
+      resyncPickBuffer();
+
+      requestAnimationFrame(function(){
+        var m = viewer.measuringTool.startInsertion({
+          showDistances:true, showAngles:false, showCoordinates:false, showHeight:false, closed:false, name:"Horizontal"
+        });
+        H_MEAS = m;
+
+        bumpPickResources(true);
+
+        function onEsc(ev){ if (ev.key!=="Escape") return; ev.stopImmediatePropagation(); ev.preventDefault(); stopHMode(true); }
+        document.addEventListener("keydown", onEsc, true);
+        function cleanupEsc(){ document.removeEventListener("keydown", onEsc, true); }
+
+        var z0=null;
+        function clampZ(){
+          if(!m || !m.points || m.points.length===0) return;
+          if(z0===null && m.points[0]?.position){ z0=m.points[0].position.z; }
+          if(z0!==null){
+            for (var i=0;i<m.points.length;i++){
+              var p=m.points[i]; if(p&&p.position){ p.position.set(p.position.x,p.position.y,z0); }
+            }
+            m._update && m._update();
+            viewer.requestMeasureUpdate && viewer.requestMeasureUpdate();
+            viewer.repaint();
+          }
+        }
+        H_IV = setInterval(function(){ if(!m || m._disposed) return; clampZ(); }, 50);
+        m.addEventListener && m.addEventListener("marker_dropped", clampZ);
+        m.addEventListener && m.addEventListener("measurement_finished", function(){
+          clampZ(); cleanupEsc();
+          if (H_IV){ clearInterval(H_IV); H_IV=null; }
+          H_MEAS=null; H_ACTIVE=false;
+          if (H_restore.active){
+            if (H_restore.had){ viewer.pickWindowSize = H_restore.val; }
+            else { try{ delete viewer.pickWindowSize; }catch(e){ viewer.pickWindowSize = undefined; } }
+            H_restore.active = false;
+          }
+          bumpPickResources(false);
+          refreshClipBox(); toast("H mode OFF");
+          LAST_TOOL = 'H';
+        });
+
+        H_ACTIVE=true; toast("H mode ON: LMB add points (endless) • MMB pan • ESC/H to exit"); LAST_TOOL = 'H';
+      });
+    }
+    function stopHMode(showToast){
+      if(!H_ACTIVE) return;
+      H_ACTIVE=false;
+      if (H_IV){ clearInterval(H_IV); H_IV=null; }
+      try{ viewer.measuringTool?.cancelInsertion?.(); }catch(e){}
+      try{ H_MEAS?.cancelInsertion?.(); }catch(e){}
+      synthRightClick();
+      H_MEAS=null;
+      if (H_restore.active){
+        if (H_restore.had){ viewer.pickWindowSize = H_restore.val; }
+        else { try{ delete viewer.pickWindowSize; }catch(e){ viewer.pickWindowSize = undefined; } }
+        H_restore.active = false;
+      }
+      bumpPickResources(false);
+      refreshClipBox();
+      if (showToast) toast("H mode OFF");
+      viewer.repaint();
+      LAST_TOOL = 'H';
+    }
+
+    // ---------- V tool (vertical chain, pure ΔZ) ----------
+    function startVerticalMeasure(){
+      const comingFromSensitive = (LAST_TOOL === 'M' || LAST_TOOL === 'P' || LAST_TOOL === 'O');
+      if (comingFromSensitive){
+        V_restore.active = true;
+        V_restore.had = Object.prototype.hasOwnProperty.call(viewer, 'pickWindowSize');
+        V_restore.val = viewer.pickWindowSize;
+        if (!(typeof viewer.pickWindowSize === 'number' && viewer.pickWindowSize >= 24)){
+          viewer.pickWindowSize = 24;
+        }
+      } else {
+        V_restore.active = false;
+      }
+
+      if (comingFromSensitive) resyncPickBuffer();
+
+      requestAnimationFrame(function(){
+        var m = viewer.measuringTool.startInsertion({
+          showDistances:true, showAngles:false, showCoordinates:false, showHeight:false, closed:false, name:"Vertical"
+        });
+        V_MEAS = m;
+
+        bumpPickResources(true);
+
+        function onEsc(ev){ if (ev.key!=="Escape") return; ev.stopImmediatePropagation(); ev.preventDefault(); stopVMode(true); }
+        document.addEventListener("keydown", onEsc, true);
+        function cleanupEsc(){ document.removeEventListener("keydown", onEsc, true); }
+
+        function clampVertical(){
+          if (!m || !m.points || m.points.length===0) return;
+          for (var i=1;i<m.points.length;i++){
+            var prev = m.points[i-1]?.position;
+            var cur  = m.points[i]?.position;
+            if (prev && cur){ cur.x = prev.x; cur.y = prev.y; } // pure ΔZ
+          }
+          m._update && m._update();
+          viewer.requestMeasureUpdate && viewer.requestMeasureUpdate();
+          viewer.repaint();
+        }
+
+        V_IV = setInterval(function(){ if (!m || m._disposed){ if (V_IV){ clearInterval(V_IV); V_IV = null; } return; } clampVertical(); }, 50);
+        m.addEventListener && m.addEventListener("marker_dropped", clampVertical);
+        m.addEventListener && m.addEventListener("measurement_finished", function(){
+          clampVertical(); cleanupEsc();
+          if (V_IV){ clearInterval(V_IV); V_IV = null; }
+          V_MEAS=null; V_ACTIVE=false;
+          if (V_restore.active){
+            if (V_restore.had){ viewer.pickWindowSize = V_restore.val; }
+            else { try{ delete viewer.pickWindowSize; }catch(e){ viewer.pickWindowSize = undefined; } }
+            V_restore.active = false;
+          }
+          bumpPickResources(false);
+          toast("V mode OFF");
+          LAST_TOOL='V';
+        });
+
+        V_ACTIVE = true;
+        toast("V mode ON: vertical-only chain | LMB add points • MMB pan • ESC/V/H to exit");
+        LAST_TOOL = 'V';
+      });
+    }
+    function stopVMode(showToast){
+      if (!V_ACTIVE) return;
+      V_ACTIVE=false;
+      if (V_IV){ clearInterval(V_IV); V_IV = null; }
+      try{ viewer.measuringTool?.cancelInsertion?.(); }catch(e){}
+      try{ V_MEAS?.cancelInsertion?.(); }catch(e){}
+      synthRightClick();
+      V_MEAS = null;
+      if (V_restore.active){
+        if (V_restore.had){ viewer.pickWindowSize = V_restore.val; }
+        else { try{ delete viewer.pickWindowSize; }catch(e){ viewer.pickWindowSize = undefined; } }
+        V_restore.active = false;
+      }
+      bumpPickResources(false);
+      if (showToast) toast("V mode OFF");
+      viewer.repaint();
+      LAST_TOOL = 'V';
+    }
+
+    // ---------- M tool (fresh measure always) ----------
+    var M_MEAS = null;
+    function startNormalMeasureFresh(){
+      if (H_ACTIVE){ toast("Finish H-mode first (press H)"); return; }
+      if (V_ACTIVE){ toast("Finish V-mode first (press V)"); return; }
+
+      try { viewer.measuringTool?.cancelInsertion?.(); } catch(e){}
+      try { M_MEAS?.cancelInsertion?.(); } catch(e){}
+      synthRightClick();
+
+      requestAnimationFrame(function(){
+        var m = viewer.measuringTool.startInsertion({
+          showDistances:true, showAngles:false, showCoordinates:false, showHeight:false, closed:false, name:"Measure"
+        });
+        M_MEAS = m; LAST_TOOL = 'M';
+
+        function onEsc(ev){ if (ev.key!=="Escape") return; ev.stopImmediatePropagation(); ev.preventDefault(); stopNormalMeasure(true); }
+        document.addEventListener("keydown", onEsc, true);
+        function cleanup(){ document.removeEventListener("keydown", onEsc, true); }
+
+        m.addEventListener && m.addEventListener("measurement_finished", function(){ cleanup(); M_MEAS=null; toast("Measure finished"); LAST_TOOL='M'; });
+        toast("Measure ON: LMB add points • RMB/dblclick finish • ESC to cancel");
+      });
+    }
+    function stopNormalMeasure(showToast){
+      try { viewer.measuringTool?.cancelInsertion?.(); } catch(e){}
+      try { M_MEAS?.cancelInsertion?.(); } catch(e){}
+      synthRightClick();
+      M_MEAS=null;
+      if (showToast) toast("Measure OFF");
+      viewer.repaint();
+      LAST_TOOL = 'M';
+    }
+
+    // ---------- Hotkeys ----------
+    document.addEventListener("keydown", function(ev){
+      var k = ev.key.toLowerCase();
+      if (k === "h"){ if (V_ACTIVE){ stopVMode(true); return; } if (!H_ACTIVE) startHorizontalMeasure(); else stopHMode(true); }
+      if (k === "v"){ if (H_ACTIVE){ stopHMode(true); return; } if (!V_ACTIVE) startVerticalMeasure(); else stopVMode(true); }
+      if (k === "m"){ startNormalMeasureFresh(); }
+      if (k === "o"){ setCameraModeSafe(Potree.CameraMode.ORTHOGRAPHIC, 'O'); viewer.repaint(); toast("Orthographic"); }
+      if (k === "p"){ setCameraModeSafe(Potree.CameraMode.PERSPECTIVE,  'P'); viewer.repaint(); toast("Perspective"); }
+      if (k === "b"){
+        var box = window.__clipBox; if (!box || !viewer || !viewer.setClipTask) return;
+        if (box.visible){ box.visible=false; viewer.setClipTask(Potree.ClipTask.NONE); toast("Clip box: hidden"); }
+        else { box.visible=true; viewer.setClipTask(Potree.ClipTask.SHOW_INSIDE); toast("Clip box: shown"); }
+        viewer.repaint();
+      }
+      if (k === "c"){
+        // Use wrapped clear (also used by toolbar icon) — safe during our box locks
+        viewer.scene.removeAllMeasurements();
+      }
+    });
+
+    // Note: Potree 1.7 has no native P/O/C hotkeys; these are custom.
+  </script>
+</body>
 </html>
